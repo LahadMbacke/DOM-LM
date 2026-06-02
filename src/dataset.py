@@ -4,15 +4,19 @@ from pathlib import Path
 import pickle
 
 class SWDEDataset(Dataset):
-    def __init__(self, dataset_path, domain="university",split="train"):
-        self.path = Path(dataset_path) / domain
-        self.files = self._get_split(sorted(self.path.glob("**/*.pkl")),split)
-        self._idx2file = []        
-        for file_id, file in enumerate(self.files):            
-            with open(file,'rb') as f:
-                features = pickle.load(f)    
-            prev_len = len(self._idx2file)        
-            self._idx2file.extend(((prev_len,file_id) for _ in range(len(features))) )            
+    def __init__(self, dataset_path, domain="university", split="train"):
+        base = Path(dataset_path)
+        domains = domain if isinstance(domain, list) else [domain]
+        all_files = []
+        for d in domains:
+            all_files.extend(sorted((base / d).glob("**/*.pkl")))
+        self.files = self._get_split(all_files, split)
+        self._idx2file = []
+        for file_id, file in enumerate(self.files):
+            with open(file, 'rb') as f:
+                features = pickle.load(f)
+            prev_len = len(self._idx2file)
+            self._idx2file.extend((prev_len, file_id) for _ in range(len(features)))
         self.current_features = None
         self.current_file_idx = None
 

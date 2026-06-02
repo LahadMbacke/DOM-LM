@@ -64,13 +64,18 @@ class TreePositionEmbeddings(nn.Module):
         )
 
     def forward(self, node_ids=None, parent_node_ids=None,sibling_node_ids=None,depth_ids=None,tag_ids=None):
-        embeddings = (        
+        node_ids = node_ids.clamp(0, self.node_embeddings.num_embeddings - 1)
+        parent_node_ids = parent_node_ids.clamp(0, self.parent_embeddings.num_embeddings - 1)
+        sibling_node_ids = sibling_node_ids.clamp(0, self.sibling_embeddings.num_embeddings - 1)
+        depth_ids = depth_ids.clamp(0, self.depth_embeddings.num_embeddings - 1)
+        tag_ids = tag_ids.clamp(0, self.tag_embeddings.num_embeddings - 1)
+        embeddings = (
             self.node_embeddings(node_ids) +
             self.parent_embeddings(parent_node_ids) +
             self.sibling_embeddings(sibling_node_ids) +
             self.depth_embeddings(depth_ids) +
             self.tag_embeddings(tag_ids)
-        )        
+        )
         return embeddings
 
 
