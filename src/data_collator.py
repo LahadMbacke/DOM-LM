@@ -137,17 +137,21 @@ class DataCollatorForDOMNodeMask(DataCollatorForWholeWordMask):
             node_ids = [e["node_ids"] for e in examples]
         else:
             raise ValueError(
-                "Examples required to have both input_ids and node_ids"                
+                "Examples required to have both input_ids and node_ids"
             )
 
         batch_input = _torch_collate_batch(input_ids, self.tokenizer, pad_to_multiple_of=self.pad_to_multiple_of)
 
         mask_labels = []
-        for node_id in node_ids:            
+        for node_id in node_ids:
             mask_labels.append(self._whole_node_mask(node_id))
         batch_mask = _torch_collate_batch(mask_labels, self.tokenizer, pad_to_multiple_of=self.pad_to_multiple_of)
         inputs, labels = self.torch_mask_tokens(batch_input, batch_mask)
-        return {"input_ids": inputs, "labels": labels}
+
+        batch = {"input_ids": inputs, "labels": labels}
+        for key in ["node_ids", "parent_node_ids", "sibling_node_ids", "depth_ids", "tag_ids"]:
+            batch[key] = _torch_collate_batch([e[key] for e in examples], self.tokenizer, pad_to_multiple_of=self.pad_to_multiple_of)
+        return batch
 
     def tf_call(self, examples: List[Union[List[int], Any, Dict[str, Any]]]) -> Dict[str, Any]:
         # Handle dict or lists with proper padding and conversion to tensor.
@@ -166,7 +170,10 @@ class DataCollatorForDOMNodeMask(DataCollatorForWholeWordMask):
             mask_labels.append(self._whole_node_mask(node_id))
         batch_mask = _tf_collate_batch(mask_labels, self.tokenizer, pad_to_multiple_of=self.pad_to_multiple_of)
         inputs, labels = self.tf_mask_tokens(batch_input, batch_mask)
-        return {"input_ids": inputs, "labels": labels}
+        batch = {"input_ids": inputs, "labels": labels}
+        for key in ["node_ids", "parent_node_ids", "sibling_node_ids", "depth_ids", "tag_ids"]:
+            batch[key] = _tf_collate_batch([e[key] for e in examples], self.tokenizer, pad_to_multiple_of=self.pad_to_multiple_of)
+        return batch
 
     def numpy_call(self, examples: List[Union[List[int], Any, Dict[str, Any]]]) -> Dict[str, Any]:
         if isinstance(examples[0], Mapping):
@@ -174,17 +181,20 @@ class DataCollatorForDOMNodeMask(DataCollatorForWholeWordMask):
             node_ids = [e["node_ids"] for e in examples]
         else:
             raise ValueError(
-                "Examples required to have both input_ids and node_ids"                
+                "Examples required to have both input_ids and node_ids"
             )
 
         batch_input = _numpy_collate_batch(input_ids, self.tokenizer, pad_to_multiple_of=self.pad_to_multiple_of)
 
         mask_labels = []
-        for node_id in node_ids:            
+        for node_id in node_ids:
             mask_labels.append(self._whole_node_mask(node_id))
         batch_mask = _numpy_collate_batch(mask_labels, self.tokenizer, pad_to_multiple_of=self.pad_to_multiple_of)
         inputs, labels = self.numpy_mask_tokens(batch_input, batch_mask)
-        return {"input_ids": inputs, "labels": labels}
+        batch = {"input_ids": inputs, "labels": labels}
+        for key in ["node_ids", "parent_node_ids", "sibling_node_ids", "depth_ids", "tag_ids"]:
+            batch[key] = _numpy_collate_batch([e[key] for e in examples], self.tokenizer, pad_to_multiple_of=self.pad_to_multiple_of)
+        return batch
 
     def _whole_node_mask(self, input_nodes: List[int], max_predictions=512):
         """
