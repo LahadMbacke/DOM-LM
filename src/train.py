@@ -39,6 +39,7 @@ def parse_args():
     parser.add_argument('--save_steps',   type=int, default=500)
     parser.add_argument('--eval_steps',   type=int, default=500)
     parser.add_argument('--logging_steps', type=int, default=100)
+    parser.add_argument('--resume_from_checkpoint', type=str, default=None)
     return parser.parse_args()
 
 
@@ -105,7 +106,7 @@ def main():
         )
         tracker.start()
 
-    trainer.train()
+    trainer.train(resume_from_checkpoint=args.resume_from_checkpoint)
 
     if tracker is not None:
         emissions = tracker.stop()
