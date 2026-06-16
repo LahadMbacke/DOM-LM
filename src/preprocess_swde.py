@@ -1,4 +1,5 @@
 import argparse
+import json
 import re
 import sys
 from pathlib import Path
@@ -13,6 +14,16 @@ if str(ROOT) not in sys.path:
 
 from src.preprocess import extract_features, extract_features_ae_task
 from src.domlm import DOMLMConfig
+
+
+def build_domain_label2id(groundtruth_dir: Path, domain: str) -> dict:
+    """Build {O: 0, attr1: 1, ...} from groundtruth .txt filenames for a domain."""
+    label2id = {"O": 0}
+    for f in sorted((groundtruth_dir / domain).glob("*.txt")):
+        attr = f.stem.rsplit("-", 1)[-1]
+        if attr not in label2id:
+            label2id[attr] = len(label2id)
+    return label2id
 
 
 def extract_labels(label_files):
@@ -80,40 +91,48 @@ def preprocess_swde(input_dir, config, output_dir, domains, num_workers=1):
 def preprocess_swde_attr_extract(input_dir, config_file, output_dir, domains):
     SWDE_PATH = Path(input_dir)
     LABEL_PATH = SWDE_PATH / 'groundtruth'
+    # Handle case where py7zr extracted into a nested groundtruth/ subdirectory
+    if (LABEL_PATH / 'groundtruth').exists():
+        LABEL_PATH = LABEL_PATH / 'groundtruth'
     PROC_PATH = Path(output_dir)
-    DOMAINS = domains
 
     config = DOMLMConfig.from_json_file(config_file)
 
-    for domain in DOMAINS:
-        for website_dir in (SWDE_PATH / domain).iterdir():
+    for domain in domains:
+        label2id = build_domain_label2id(LABEL_PATH, domain)
+        domain_out = PROC_PATH / domain
+        domain_out.mkdir(parents=True, exist_ok=True)
+        with open(domain_out / 'label2id.json', 'w') as f:
+            json.dump(label2id, f)
+        print(f"[{domain}] labels: {label2id}")
+
+        errors = []
+        for website_dir in sorted((SWDE_PATH / domain).iterdir()):
             if not website_dir.is_dir():
                 continue
-            files = sorted((website_dir.glob("./*.htm")))
+            files = sorted(website_dir.glob("./*.htm"))
             website_name = website_dir.name.split('-')[1][:website_dir.name.split('-')[1].index('(')]
             label_files = sorted((LABEL_PATH / domain).glob(f'{domain}-{website_name}*'))
             label_infos = extract_labels(label_files)
             pbar = tqdm.tqdm(files, total=len(files))
-            errors = []
             for path in pbar:
                 pbar.set_description(f"Processing {path.relative_to(SWDE_PATH / domain)}")
-                with open(path,'r') as f:
+                with open(path, 'r', errors='replace') as f:
                     html = f.read()
                 html = html.lstrip('﻿')
                 html = re.sub(r'<\?xml[^>]*\?>', '', html)
                 try:
                     label2text = label_infos[path.name.split('.')[0]]
-                    text2label = {v['value']: {'label':k, 'nums':v['nums']} for k,v in label2text.items()}
-                    features = extract_features_ae_task(html, text2label, config)
+                    text2label = {v['value']: {'label': k, 'nums': v['nums']} for k, v in label2text.items()}
+                    features = extract_features_ae_task(html, text2label, config, label2id=label2id)
                     dir_name = PROC_PATH / domain / path.parent.name
-                    dir_name.mkdir(parents=True,exist_ok=True)
-                    with open(dir_name / path.with_suffix(".pkl").name,'wb') as f:
+                    dir_name.mkdir(parents=True, exist_ok=True)
+                    with open(dir_name / path.with_suffix(".pkl").name, 'wb') as f:
                         pickle.dump(features, f)
                 except Exception as e:
                     print(e)
                     errors.append(path)
-                    pass
-        print(f"Total errors: {len(errors)}")
+        print(f"[{domain}] Total errors: {len(errors)}")
 
 
 if __name__ == '__main__':

@@ -4,7 +4,7 @@ from lxml import etree
 from transformers import AutoTokenizer
 
 from src.html_utils import get_cleaned_body
-from src.utils import truncate, label2id
+from src.utils import truncate
 
 
 tokenizer = AutoTokenizer.from_pretrained("roberta-base", )
@@ -299,7 +299,7 @@ def extract_features(html_string,config,m=None,s=128):
         result.append(data)
     return result
 
-def get_tree_features_ae_task(t: List, token_repr: dict, node2label:dict, max_seq_length:int):
+def get_tree_features_ae_task(t: List, token_repr: dict, node2label:dict, max_seq_length:int, label2id:dict = None):
     elem_idxs = {}
     result = {
             "node_ids": [] , # p0
@@ -312,6 +312,9 @@ def get_tree_features_ae_task(t: List, token_repr: dict, node2label:dict, max_se
             "attention_mask" : [],
             "labels": []
         }
+    if label2id is None:
+        from src.utils import label2id as _default_label2id
+        label2id = _default_label2id
     reprs = []
     input_ids = []
     attention_mask = []
@@ -359,8 +362,6 @@ def get_tree_features_ae_task(t: List, token_repr: dict, node2label:dict, max_se
                 result[key] += attn_mask
             elif key == "labels":
                 result[key] += label
-            # elif key == "position_ids":
-            #     result[key] += [len(result[key])+j for j in range(len(input_id))]
             else:
                 result[key] += [el_result[key]] * len_tokens
     return result
@@ -384,7 +385,7 @@ def assign_label_for_nodes(dom: etree._Element, text2label:dict):
             res[el] = text2label[text]['label']
     return res
 
-def extract_features_ae_task(html_string, text2label, config, m=None, s=128):
+def extract_features_ae_task(html_string, text2label, config, m=None, s=128, label2id=None):
     if m is None:
         m = tokenizer.model_max_length
     padding_idxs = {
@@ -405,7 +406,7 @@ def extract_features_ae_task(html_string, text2label, config, m=None, s=128):
     subtrees = generate_subtrees(dom, token_repr, m, s) # requires tokenizer
     result = []
     for sub in subtrees:
-        data = get_tree_features_ae_task(sub, token_repr, node2label, m)
+        data = get_tree_features_ae_task(sub, token_repr, node2label, m, label2id)
         current_len = len(data["input_ids"])
         pad_len = max(m - current_len,0)
         for key in data:
